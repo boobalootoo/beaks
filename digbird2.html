@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Dirt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #166534;
+            overflow: hidden;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        canvas {
+            background-color: #d1fae5;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            height: auto;
+            cursor: none;
+        }
+    </style>
+</head>
+<body class="bg-emerald-50">
+
+    <div class="container">
+        <canvas id="game-canvas" width="800" height="450"></canvas>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('game-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const DIRT_SIZE = 10;
+            const DIRT_COLORS = ['#8B4513', '#6E3C0C', '#552D08', '#3C2005'];
+            
+            let mouseX = -100;
+            let mouseY = -100;
+            let isMouseDown = false;
+            
+            const gridWidth = Math.ceil(canvas.width / DIRT_SIZE);
+            const gridHeight = Math.ceil(canvas.height / DIRT_SIZE);
+            const dirtGrid = [];
+
+            // Bird variables
+            let BIRD_X = canvas.width / 2;
+            let BIRD_Y = 50;
+            const BIRD_BODY_RADIUS = 30;
+            const BIRD_HEAD_RADIUS = 15;
+            const BIRD_BEAK_LENGTH = 30;
+
+            // Grub variables
+            const GRUB_COUNT = 5;
+            const GRUB_SIZE = 45;
+            let grubs = [];
+            const grubImage = new Image();
+            grubImage.src = 'https://raw.githubusercontent.com/boobalootoo/beakeasy/main/grub.gif';
+
+            // Initialize the dirt grid
+            for (let y = 0; y < gridHeight; y++) {
+                dirtGrid[y] = [];
+                for (let x = 0; x < gridWidth; x++) {
+                    const topLayerY = canvas.height / 3;
+                    const isSurface = (y * DIRT_SIZE) >= topLayerY;
+                    dirtGrid[y][x] = {
+                        originalX: x * DIRT_SIZE,
+                        originalY: y * DIRT_SIZE,
+                        currentX: x * DIRT_SIZE,
+                        currentY: y * DIRT_SIZE,
+                        layer: isSurface ? Math.min(Math.floor(((y * DIRT_SIZE) - topLayerY) / DIRT_SIZE), DIRT_COLORS.length - 1) : -1
+                    };
+                }
+            }
+
+            // Generate grubs
+            function generateGrubs() {
+                for (let i = 0; i < GRUB_COUNT; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = canvas.height / 3 + Math.random() * (canvas.height - canvas.height / 3);
+                    grubs.push({
+                        x,
+                        y,
+                        velX: (Math.random() - 0.5) * 0.5,
+                        velY: (Math.random() - 0.5) * 0.5,
+                        radius: GRUB_SIZE / 2,
+                    });
+                }
+            }
+            generateGrubs();
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Sky + grass
+                ctx.fillStyle = '#ADD8E6';
+                ctx.fillRect(0, 0, canvas.width, canvas.height / 3);
+                ctx.fillStyle = '#d1fae5';
+                ctx.fillRect(0, canvas.height / 3, canvas.width, canvas.height);
+
+                // Dirt
+                for (let y = 0; y < gridHeight; y++) {
+                    for (let x = 0; x < gridWidth; x++) {
+                        const dirt = dirtGrid[y][x];
+                        if (dirt.layer >= 0) {
+                            ctx.fillStyle = DIRT_COLORS[dirt.layer];
+                            ctx.fillRect(dirt.currentX, dirt.currentY, DIRT_SIZE, DIRT_SIZE);
+                        }
+                    }
+                }
+
+                // Grubs
+                grubs.forEach(grub => {
+                    if (grubImage.complete) {
+                        ctx.drawImage(grubImage, grub.x - grub.radius, grub.y - grub.radius, GRUB_SIZE, GRUB_SIZE);
+                    } else {
+                        ctx.fillStyle = '#65A30D';
+                        ctx.beginPath();
+                        ctx.arc(grub.x, grub.y, grub.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    ctx.arc(grub.x, grub.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Bird
+                const headAngle = Math.atan2(mouseY - BIRD_Y, mouseX - BIRD_X);
+                const headX = BIRD_X + Math.cos(headAngle) * BIRD_BODY_RADIUS;
+                const headY = BIRD_Y + Math.sin(headAngle) * BIRD_BODY_RADIUS;
+
+                ctx.save();
+                ctx.translate(BIRD_X, BIRD_Y);
+                ctx.fillStyle = '#FACC15';
+                ctx.beginPath();
+                ctx.arc(0, 0, BIRD_BODY_RADIUS, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.fillStyle = '#166534';
+                ctx.beginPath();
+                ctx.arc(headX - BIRD_X, headY - BIRD_Y, BIRD_HEAD_RADIUS, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(headX - BIRD_X + 5, headY - BIRD_Y - 5, 3, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.fillStyle = '#D97706';
+                ctx.beginPath();
+                const angleOffset = Math.PI / 12;
+                const beakBaseTopX = headX + Math.cos(headAngle - angleOffset) * BIRD_HEAD_RADIUS;
+                const beakBaseTopY = headY + Math.sin(headAngle - angleOffset) * BIRD_HEAD_RADIUS;
+                const beakBaseBottomX = headX + Math.cos(headAngle + angleOffset) * BIRD_HEAD_RADIUS;
+                const beakBaseBottomY = headY + Math.sin(headAngle + angleOffset) * BIRD_HEAD_RADIUS;
+                const beakTipX = headX + Math.cos(headAngle) * (BIRD_HEAD_RADIUS + BIRD_BEAK_LENGTH);
+                const beakTipY = headY + Math.sin(headAngle) * (BIRD_HEAD_RADIUS + BIRD_BEAK_LENGTH);
+                ctx.moveTo(beakTipX - BIRD_X, beakTipY - BIRD_Y);
+                ctx.lineTo(beakBaseTopX - BIRD_X, beakBaseTopY - BIRD_Y);
+                ctx.lineTo(beakBaseBottomX - BIRD_X, beakBaseBottomY - BIRD_Y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            function update() {
+                const dx = mouseX - (BIRD_X + Math.cos(Math.atan2(mouseY - BIRD_Y, mouseX - BIRD_X)) * BIRD_BODY_RADIUS);
+                const dy = mouseY - (BIRD_Y + Math.sin(Math.atan2(mouseY - BIRD_Y, mouseX - BIRD_X)) * BIRD_BODY_RADIUS);
+                BIRD_X += dx * 0.1;
+                BIRD_Y += dy * 0.1;
+
+                const dirtStart = canvas.height / 3;
+                grubs.forEach(grub => {
+                    const distanceToBird = Math.hypot(grub.x - BIRD_X, grub.y - BIRD_Y);
+                    if (distanceToBird < 150) {
+                        const angle = Math.atan2(grub.y - BIRD_Y, grub.x - BIRD_X);
+                        grub.velX = Math.cos(angle) * 1.5;
+                        grub.velY = Math.sin(angle) * 1.5;
+                    } else {
+                        grub.velX = (Math.random() - 0.5) * 0.5;
+                        grub.velY = (Math.random() - 0.5) * 0.5;
+                    }
+                    grub.x += grub.velX;
+                    grub.y += grub.velY;
+                    grub.x = Math.max(grub.radius, Math.min(grub.x, canvas.width - grub.radius));
+                    grub.y = Math.max(dirtStart + grub.radius, Math.min(grub.y, canvas.height - grub.radius));
+                });
+
+                // ---- FIXED COLLISION LOGIC ----
+                if (isMouseDown) {
+                    const headAngle = Math.atan2(mouseY - BIRD_Y, mouseX - BIRD_X);
+                    const headX = BIRD_X + Math.cos(headAngle) * BIRD_BODY_RADIUS;
+                    const headY = BIRD_Y + Math.sin(headAngle) * BIRD_BODY_RADIUS;
+                    const beakTipX = headX + Math.cos(headAngle) * (BIRD_HEAD_RADIUS + BIRD_BEAK_LENGTH);
+                    const beakTipY = headY + Math.sin(headAngle) * (BIRD_HEAD_RADIUS + BIRD_BEAK_LENGTH);
+                    const beakBaseX = headX + Math.cos(headAngle) * BIRD_HEAD_RADIUS;
+                    const beakBaseY = headY + Math.sin(headAngle) * BIRD_HEAD_RADIUS;
+
+                    function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+                        const A = px - x1;
+                        const B = py - y1;
+                        const C = x2 - x1;
+                        const D = y2 - y1;
+                        const dot = A * C + B * D;
+                        const lenSq = C * C + D * D;
+                        let t = (lenSq !== 0) ? dot / lenSq : -1;
+                        if (t < 0) return Math.hypot(px - x1, py - y1);
+                        if (t > 1) return Math.hypot(px - x2, py - y2);
+                        return Math.hypot(px - (x1 + t * C), py - (y1 + t * D));
+                    }
+
+                    grubs = grubs.filter(grub => {
+                        const dist = pointToSegmentDist(grub.x, grub.y, beakBaseX, beakBaseY, beakTipX, beakTipY);
+                        return dist > grub.radius;
+                    });
+                }
+                // ---- END FIX ----
+
+                if (grubs.length < GRUB_COUNT) {
+                    const x = Math.random() * canvas.width;
+                    const y = canvas.height / 3 + Math.random() * (canvas.height - canvas.height / 3);
+                    grubs.push({
+                        x,
+                        y,
+                        velX: (Math.random() - 0.5) * 0.5,
+                        velY: (Math.random() - 0.5) * 0.5,
+                        radius: GRUB_SIZE / 2,
+                    });
+                }
+            }
+
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+                mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            });
+            canvas.addEventListener('mousedown', () => { isMouseDown = true; });
+            canvas.addEventListener('mouseup', () => { isMouseDown = false; });
+
+            function gameLoop() {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
